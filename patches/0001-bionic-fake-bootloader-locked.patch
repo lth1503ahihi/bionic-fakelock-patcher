@@ -1,0 +1,15 @@
+diff --git a/libc/system_properties/system_properties.cpp b/libc/system_properties/system_properties.cpp
+index 886bef127..6be956746 100644
+--- a/libc/system_properties/system_properties.cpp
++++ b/libc/system_properties/system_properties.cpp
+@@ -322,6 +322,10 @@ void SystemProperties::ReadCallback(const prop_info* pi,
+   // change.  We use relaxed memory order on the serial load for the same reason.
+   if (is_read_only(pi->name)) {
+     uint32_t serial = load_const_atomic(&pi->serial, memory_order_relaxed);
++    if (strcmp(pi->name, "ro.boot.flash.locked") == 0)
++     callback(cookie, pi->name, "1", serial);
++    if (strcmp(pi->name, "ro.boot.verifiedbootstate") == 0)
++     callback(cookie, pi->name, "green", serial);
+     if (pi->is_long()) {
+       callback(cookie, pi->name, pi->long_value(), serial);
+     } else {
