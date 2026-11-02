@@ -89,18 +89,26 @@ Target: `frameworks/base/core/jni/android_os_SystemProperties.cpp`
 ## Approach B: Binary ASM Patching (For Stock OEM ROMs)
 
 On OEM stock ROMs (Samsung OneUI, LG UX, Xiaomi HyperOS, ColorOS), manufacturer source code is unavailable.  
-We implement the exact same logic directly at the ARM64 machine-code level using **Code Cave injection** in `libc.so`.
+We implement the exact same logic directly at the native machine-code level (**ARM64 AArch64** & **ARM32 ARMv7-a / Thumb-2**) using **Code Cave injection** in `libc.so`.
 
-Two standalone hook scripts are available in [`hooks/`](hooks/):
-1. **[`hooks/hook_property_read_callback.py`](hooks/hook_property_read_callback.py):** Intercepts Bionic's internal callback invocation (`blr x19`).
-2. **[`hooks/hook_property_get_and_openat.py`](hooks/hook_property_get_and_openat.py):** Intercepts `__system_property_get` and redirects `/proc/cmdline` via `openat`.
+Standalone hook reference implementations are available in [`hooks/`](hooks/):
+1. **[`hooks/hook_property_get_arm32_thumb.py`](hooks/hook_property_get_arm32_thumb.py):** Intercepts `__system_property_get` on **ARMv7-a 32-bit** (Thumb-2 mode using `movw`/`movt` word loads).
+2. **[`hooks/hook_property_get_and_openat.py`](hooks/hook_property_get_and_openat.py):** Intercepts `__system_property_get` on **ARM64** and redirects `/proc/cmdline` via `openat`.
+3. **[`hooks/hook_property_read_callback.py`](hooks/hook_property_read_callback.py):** Intercepts Bionic's internal callback invocation (`blr x19`) on **ARM64**.
 
 ### Automated Patcher Usage
+`patcher.py` automatically detects bitness and architecture (ELF32/Thumb-2 vs. ELF64/AArch64), parses `.dynsym`, allocates an aligned code cave, and applies the appropriate branch.
+
 ```bash
 pip install -r requirements.txt
 
 # 1. Pull libc.so from device via TWRP/ADB:
-adb shell "cp /system/apex/com.android.runtime/lib64/bionic/libc.so /sdcard/libc.so"
+# For 64-bit devices (ARM64):
+adb shell "cp /system/apex/com.android.runtime/lib64/bionic/libc.so /sdcard/libc.so || cp /system/lib64/libc.so /sdcard/libc.so"
+adb pull /sdcard/libc.so ./libc.so
+
+# For 32-bit legacy devices (ARMv7-a, e.g. Galaxy J4+, Redmi 4A):
+adb shell "cp /system/apex/com.android.runtime/lib/bionic/libc.so /sdcard/libc.so || cp /system/lib/libc.so /sdcard/libc.so"
 adb pull /sdcard/libc.so ./libc.so
 
 # 2. Patch binary:

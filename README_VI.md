@@ -89,18 +89,26 @@ File: [`patches/0002-frameworks-base-fake-bootloader-locked.patch`](patches/0002
 ## Cách 2: Vá Nhị Phân Assembly (Dành cho ROM Stock của Hãng)
 
 Trên các bản ROM Stock đóng kín (Samsung OneUI, LG UX, Xiaomi HyperOS, ColorOS...), bạn không có mã nguồn để build.  
-Chúng ta tái hiện chính xác logic trên bằng cách tiêm trực tiếp mã máy ARM64 vào **Code Cave** của file nhị phân `libc.so`.
+Chúng ta tái hiện chính xác logic trên bằng cách tiêm trực tiếp mã máy (**ARM64 AArch64** & **ARM32 ARMv7-a / Thumb-2**) vào **Code Cave** của file nhị phân `libc.so`.
 
 Các đoạn mã hook mẫu nằm trong thư mục [`hooks/`](hooks/):
-1. **[`hooks/hook_property_read_callback.py`](hooks/hook_property_read_callback.py):** Chặn trực tiếp tại hàm callback (`blr x19`) của Bionic.
-2. **[`hooks/hook_property_get_and_openat.py`](hooks/hook_property_get_and_openat.py):** Chặn tại `__system_property_get` và chuyển hướng `/proc/cmdline` qua `openat`.
+1. **[`hooks/hook_property_get_arm32_thumb.py`](hooks/hook_property_get_arm32_thumb.py):** Hook `__system_property_get` cho **ARMv7-a 32-bit** (chế độ Thumb-2 với kỹ thuật load word `movw`/`movt`).
+2. **[`hooks/hook_property_get_and_openat.py`](hooks/hook_property_get_and_openat.py):** Hook `__system_property_get` cho **ARM64** và chuyển hướng `/proc/cmdline` qua `openat`.
+3. **[`hooks/hook_property_read_callback.py`](hooks/hook_property_read_callback.py):** Hook trực tiếp tại hàm callback nội bộ (`blr x19`) của Bionic trên **ARM64**.
 
 ### Sử dụng công cụ tự động
+`patcher.py` tự động nhận diện kiến trúc (ELF32/Thumb-2 hay ELF64/AArch64), phân giải `.dynsym`, cấp phát Code Cave chuẩn alignment và tiêm lệnh nhảy thích hợp.
+
 ```bash
 pip install -r requirements.txt
 
 # 1. Trích xuất libc.so từ máy qua TWRP:
-adb shell "cp /system/apex/com.android.runtime/lib64/bionic/libc.so /sdcard/libc.so"
+# Đối với máy 64-bit (ARM64):
+adb shell "cp /system/apex/com.android.runtime/lib64/bionic/libc.so /sdcard/libc.so || cp /system/lib64/libc.so /sdcard/libc.so"
+adb pull /sdcard/libc.so ./libc.so
+
+# Đối với máy 32-bit (ARMv7-a, ví dụ Galaxy J4+, Redmi 4A):
+adb shell "cp /system/apex/com.android.runtime/lib/bionic/libc.so /sdcard/libc.so || cp /system/lib/libc.so /sdcard/libc.so"
 adb pull /sdcard/libc.so ./libc.so
 
 # 2. Chạy patch tự động:

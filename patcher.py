@@ -413,13 +413,17 @@ class BionicPatcher:
 
         get_target = self.find_system_property_get()
         if not get_target:
-            get_target = 0x50EAC if self.is_64 else 0x30124
-            self.log(f"Falling back to default offset: 0x{get_target:X}")
+            raise RuntimeError(
+                f"[-] Failed to locate '__system_property_get' in {self.arch_name}. "
+                "Ensure libc.so contains valid .dynsym exported symbols."
+            )
 
         cave = self.find_code_cave(needed_size=512)
         if not cave:
-            cave = 0xC1960 if self.is_64 else 0x50000
-            self.log(f"Falling back to default code cave: 0x{cave:X}")
+            raise RuntimeError(
+                f"[-] Failed to allocate dynamic code cave (512 bytes) in executable segments. "
+                "Ensure libc.so has valid RX PT_LOAD segments with trailing alignment padding."
+            )
 
         step = 4 if self.is_64 else 2
         if self.is_64:
